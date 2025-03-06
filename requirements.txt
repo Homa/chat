@@ -1,4 +1,32 @@
-streamlit
-ollama
-sqlite3
-python-dateutil 
+# FastAPI and server
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.4.2
+
+# MongoDB
+pymongo==4.6.0
+motor==3.3.1  # Async MongoDB driver
+
+# Date handling
+python-dateutil==2.8.2
+pytz==2023.3.post1
+
+# API documentation
+starlette==0.27.0
+python-multipart==0.0.6
+
+# Validation and serialization
+email-validator==2.1.0.post1
+
+# Streamlit UI
+streamlit==1.28.0
+
+# Ollama integration
+ollama==0.1.1
+
+# Database
+sqlite3  # Built into Python
+
+# Additional utilities
+python-dotenv==1.0.0
+requests==2.31.0 
