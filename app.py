@@ -7,14 +7,22 @@ import database
 # Initialize Ollama client
 client = Client(host='http://localhost:11434')
 
-def get_ai_response(prompt):
-    """Get response from Ollama's Mistral model"""
-    response = client.chat(model='mistral', messages=[
-        {
-            'role': 'user',
-            'content': prompt
-        }
-    ])
+def get_ai_response(prompt, context=None):
+    """Get response from Ollama's Mistral model with context"""
+    messages = []
+    
+    if context:
+        messages.append({
+            'role': 'system',
+            'content': f"Previous relevant interaction: {context}"
+        })
+    
+    messages.append({
+        'role': 'user',
+        'content': prompt
+    })
+    
+    response = client.chat(model='mistral', messages=messages)
     return response['message']['content']
 
 def save_feedback(message_id, is_positive):
@@ -29,12 +37,37 @@ def save_feedback(message_id, is_positive):
     conn.commit()
     conn.close()
 
+def save_curated_response(message_id, curated_response):
+    """Save a curated response for a negative feedback"""
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE chat_history 
+        SET curated_response = ? 
+        WHERE id = ?
+    """, (curated_response, message_id))
+    conn.commit()
+    conn.close()
+
 def main():
     st.title("AI Chat Assistant")
     
-    # Initialize session state for chat history if it doesn't exist
+    # Initialize session state
     if 'messages' not in st.session_state:
         st.session_state.messages = []
+    if 'awaiting_curation' not in st.session_state:
+        st.session_state.awaiting_curation = None
+
+    # Handle curation if needed
+    if st.session_state.awaiting_curation:
+        st.info("This response received negative feedback. Please provide a better response:")
+        message_id, question = st.session_state.awaiting_curation
+        curated_response = st.text_area("Curated response:", key="curation_input")
+        if st.button("Submit Curated Response"):
+            save_curated_response(message_id, curated_response)
+            st.session_state.awaiting_curation = None
+            st.success("Curated response saved!")
+            st.rerun()
 
     # Display chat history
     for message in st.session_state.messages:
@@ -48,7 +81,9 @@ def main():
                         st.toast("Thanks for your feedback!")
                     if st.button("👎", key=f"down_{message['id']}"):
                         save_feedback(message['id'], False)
-                        st.toast("Thanks for your feedback!")
+                        st.session_state.awaiting_curation = (message['id'], message['content'])
+                        st.toast("Thanks for your feedback! Please provide a better response.")
+                        st.rerun()
 
     # Chat input
     if prompt := st.chat_input("What would you like to know?"):
@@ -57,16 +92,20 @@ def main():
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        # Check for similar previous questions
+        context = database.find_similar_question(prompt)
+        
         # Get AI response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                response = get_ai_response(prompt)
+                if context:
+                    st.info("Using previous successful interaction as context")
+                response = get_ai_response(prompt, context)
                 st.markdown(response)
                 
                 # Add feedback buttons immediately after response
                 col1, col2 = st.columns([1, 15])
                 with col1:
-                    message_id = None  # Initialize message_id
                     # Save to database first to get message_id
                     conn = database.get_connection()
                     cursor = conn.cursor()
@@ -83,7 +122,9 @@ def main():
                         st.toast("Thanks for your feedback!")
                     if st.button("👎", key=f"down_{message_id}"):
                         save_feedback(message_id, False)
-                        st.toast("Thanks for your feedback!")
+                        st.session_state.awaiting_curation = (message_id, prompt)
+                        st.toast("Thanks for your feedback! Please provide a better response.")
+                        st.rerun()
 
         # Add assistant message to chat history
         st.session_state.messages.append({
