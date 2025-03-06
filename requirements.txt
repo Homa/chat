@@ -13,7 +13,7 @@ pytz==2023.3.post1
 
 # API documentation
 starlette==0.27.0
-python-multipart==0.0.6
+python-multipart==0.0.18
 
 # Validation and serialization
 email-validator==2.1.0.post1
